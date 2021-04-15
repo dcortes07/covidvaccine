@@ -31,7 +31,8 @@ ui <- dashboardPage(
             tabPanel("World Map",
                      valueBoxOutput("box2", width = 3),
                      valueBoxOutput("box1", width = 5),
-                     infoBoxOutput("box3")
+                     infoBoxOutput("box3"),
+                     leafletOutput("plot", height = 450)
                      ),
             tabPanel("Table", 
                      DT::dataTableOutput("table_1")
@@ -98,7 +99,50 @@ server <- function(input, output){
         width = 4
     )
   })
-  
+  output$plot <- renderLeaflet({
+        data_map <- data() %>%
+            group_by(Country) %>%
+            count() %>%                                                     # Counts nb instances, like n()
+            left_join(World %>% select(Country, geometry))                  # Joining the geometry column
+        palet <- colorNumeric("Blues",                                      # Blue palette
+                          domain = data_map %>% pull(n)#,                    # Domain of labels: nb medals
+        )
+                
+        labels <- sprintf(                                                  # Below we define the labels
+            "<strong>%s</strong><br/>%g Medals",                            # Adding text to label
+            data_map$Country,                                               # We show the country name...
+            data_map$n                                                      # ... and the nb medals
+        ) %>% lapply(htmltools::HTML)                                       # Embedded all into html language
+                   
+        data_map %>% 
+            data.frame() %>%                                # Turn into dataframe (technical)
+            sf::st_sf() %>%                                 # Format in sf
+            st_transform("+init=epsg:4326") %>%             # Convert in particular coordinate reference 
+            leaflet() %>%                                   # Call leaflet
+            addPolygons(fillColor = ~palet(n),        # Create the map (colored polygons)
+                        weight = 2,                         # Width of separation line
+                        opacity = 1,                        # Opacity of separation line
+                        color = "white",                    # Color of separation line
+                        dashArray = "3",                    # Dash size of separation line
+                        fillOpacity = 0.7,                  # Opacity of polygon colors
+                        highlight = highlightOptions(       # 5 lines below control the cursor impact
+                            weight = 2,                       # Width of line
+                            color = "#CBCBCB",                # Color of line
+                            dashArray = "",                   # No dash
+                            fillOpacity = 0.7,                # Opacity
+                            bringToFront = TRUE),
+                        label = labels,                     # LABEL! Defined above!
+                        labelOptions = labelOptions(        # Label options below...
+                            style = list("font-weight" = "normal", padding = "3px 8px"),
+                            textsize = "15px",
+                            direction = "auto")
+            ) %>%
+            addLegend(pal = palet,                    # Legend: comes from palet colors defined above
+                      values = ~n,                    # Values come from lifeExp variable
+                      opacity = 0.7,                  # Opacity of legend
+                      title = "Map Legend",           # Title of legend
+                      position = "bottomright")       # Position of legend
+    })
 }
 
 # Run the app ----
